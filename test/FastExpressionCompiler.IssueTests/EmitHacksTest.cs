@@ -7,7 +7,6 @@ using System.Reflection.Emit;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 
-
 namespace FastExpressionCompiler.IssueTests
 {
     
@@ -21,7 +20,6 @@ namespace FastExpressionCompiler.IssueTests
             return 3;
         }
 
-        
         public void DynamicMethod_Emit_Hack()
         {
             var f = Get_DynamicMethod_Emit_Hack();

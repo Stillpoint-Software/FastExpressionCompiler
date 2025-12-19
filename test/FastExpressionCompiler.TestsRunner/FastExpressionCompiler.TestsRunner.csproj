@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <TargetFrameworks>$(LatestSupportedNet)</TargetFrameworks>
+        <TargetFrameworks Condition="'$(DevMode)' != 'true'">net9.0;net8.0;net6.0</TargetFrameworks>
+        <TargetFrameworks Condition="'$(DevMode)' == 'true' OR '$(Configuration)' == 'Debug'">net9.0</TargetFrameworks>
 
         <OutputType>Exe</OutputType>
         <IsTestProject>false</IsTestProject>
@@ -14,9 +15,5 @@
         <ProjectReference Include="..\FastExpressionCompiler.LightExpression.UnitTests\FastExpressionCompiler.LightExpression.UnitTests.csproj" />
         <ProjectReference Include="..\FastExpressionCompiler.IssueTests\FastExpressionCompiler.IssueTests.csproj" />
         <ProjectReference Include="..\FastExpressionCompiler.LightExpression.IssueTests\FastExpressionCompiler.LightExpression.IssueTests.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <PackageReference Include="NUnit" Version="3.14.0"/>
     </ItemGroup>
 </Project>

@@ -81,7 +81,8 @@ public abstract class Expression
     public virtual bool IsCustomToCSharpString => false;
 
     [RequiresUnreferencedCode(Trimming.Message)]
-    public virtual StringBuilder CustomToCSharpString(StringBuilder sb, EnclosedIn enclosedIn, ref SmallList4<NamedWithIndex> named,
+    public virtual StringBuilder CustomToCSharpString(StringBuilder sb, EnclosedIn enclosedIn,
+        ref SmallList<NamedWithIndex, Stack4<NamedWithIndex>> named,
         int lineIndent = 0, bool stripNamespace = false, Func<Type, string, string> printType = null, int indentSpaces = 4,
         ObjectToCode notRecognizedToCode = null) => sb;
 
@@ -184,6 +185,26 @@ public abstract class Expression
     public static readonly ConstantExpression OneConstant = new IntConstantExpression(1);
     public static readonly ConstantExpression MinusOneConstant = new IntConstantExpression(-1);
 
+    /// <summary>Holds the value that you can change lately</summary>
+    public sealed class ValueRef<T>
+    {
+        /// <summary>Reflection access to the value FieldInfo</summary>
+        public static readonly FieldInfo ValueField = typeof(ValueRef<T>).GetField(nameof(Value), BindingFlags.Public | BindingFlags.Instance);
+        /// <summary>The adjustable value</summary>
+        public T Value;
+        /// <summary>Construct with the initial value</summary>
+        public ValueRef(T value) => Value = value;
+    }
+
+    /// <summary>Simplifies the constant which is always hold in Closure and which Value can be modified after the compilation</summary>
+    public static Expression ConstantRef<T>(T value, out ValueRef<T> valueRef)
+    {
+        valueRef = new ValueRef<T>(value);
+
+        // todo: @perf try the intrinsic?
+        return new InstanceFieldExpression(new ValueConstantExpression<ValueRef<T>>(valueRef), ValueRef<T>.ValueField);
+    }
+
     /// <summary>Avoids the boxing for all (two) bool values</summary>
     public static ConstantExpression Constant(bool value) => value ? TrueConstant : FalseConstant;
 
@@ -216,9 +237,6 @@ public abstract class Expression
     [MethodImpl((MethodImplOptions)256)]
     public static ConstantExpression ConstantOf<T>(T value) =>
         value == null ? ConstantNull<T>() : new ValueConstantExpression<T>(value);
-
-    [MethodImpl((MethodImplOptions)256)]
-    public static int TryGetIntConstantValue(Expression e) => ((IntConstantExpression)e).IntValue;
 
     [RequiresUnreferencedCode(Trimming.Message)]
     public static NewExpression New(Type type)
@@ -1580,7 +1598,7 @@ public abstract class Expression
 
     public static BlockExpression Block(IEnumerable<Expression> expressions) => new BlockExpression(expressions.AsReadOnlyList()); // todo: @perf optimize the double copying
 
-    public static BlockExpression Block(in SmallList2<Expression> expressions) => new BlockExpression(in expressions);
+    public static BlockExpression Block(in SmallList<Expression, Stack2<Expression>> expressions) => new BlockExpression(in expressions);
 
     public static BlockExpression Block(IEnumerable<ParameterExpression> variables, Expression expr0) =>
         new ManyVariablesBlockExpression(variables.AsReadOnlyList(), expr0); // todo: @perf @mem add the check for empty variables
@@ -1602,7 +1620,7 @@ public abstract class Expression
     public static BlockExpression Block(IEnumerable<ParameterExpression> variables, IEnumerable<Expression> expressions) =>
         Block(variables, expressions.AsReadOnlyList());
 
-    public static BlockExpression Block(IEnumerable<ParameterExpression> variables, in SmallList2<Expression> expressions)
+    public static BlockExpression Block(IEnumerable<ParameterExpression> variables, in SmallList<Expression, Stack2<Expression>> expressions)
     {
         var vars = variables.AsReadOnlyList();
         return vars.Count == 0
@@ -1625,7 +1643,7 @@ public abstract class Expression
     public static BlockExpression Block(Type type, IEnumerable<Expression> expressions) =>
         new TypedBlockExpression(type, expressions.AsReadOnlyList()); // todo: @perf @mem
 
-    public static BlockExpression Block(Type type, in SmallList2<Expression> expressions) =>
+    public static BlockExpression Block(Type type, in SmallList<Expression, Stack2<Expression>> expressions) =>
         new TypedBlockExpression(type, in expressions);
 
     public static BlockExpression Block(Type type, IEnumerable<ParameterExpression> variables, Expression expr0)
@@ -1652,7 +1670,7 @@ public abstract class Expression
     public static BlockExpression Block(Type type, IEnumerable<ParameterExpression> variables, IEnumerable<Expression> expressions) =>
         new TypedManyVariablesBlockExpression(type, variables.AsReadOnlyList(), expressions.AsReadOnlyList()); // todo: @perf @mem
 
-    public static BlockExpression Block(Type type, IEnumerable<ParameterExpression> variables, in SmallList2<Expression> expressions) =>
+    public static BlockExpression Block(Type type, IEnumerable<ParameterExpression> variables, in SmallList<Expression, Stack2<Expression>> expressions) =>
         new TypedManyVariablesBlockExpression(type, variables.AsReadOnlyList(), in expressions);
 
     public static BlockExpression MakeBlock(Type type, IEnumerable<ParameterExpression> variables, IEnumerable<Expression> expressions)
@@ -1937,7 +1955,7 @@ public abstract class Expression
 
         // check for lifted call
         if (lType.IsNullable() && rType.IsNullable() &&
-            ps[0].IsAssignableFrom(lType.GetNonNullableUnsafe()) && ps[1].IsAssignableFrom(rType.GetNonNullableUnsafe()) &&
+            ps[0].IsAssignableFrom(lType.GetUnderlyingNullableTypeUnsafe()) && ps[1].IsAssignableFrom(rType.GetUnderlyingNullableTypeUnsafe()) &&
             type.IsValueType && !type.IsNullable())
         {
             type = type != typeof(bool) || liftToNull ? type.GetNullable() : typeof(bool);
@@ -2089,7 +2107,7 @@ public abstract class Expression
     [RequiresUnreferencedCode(Trimming.Message)]
     private static Type GetCoalesceType(Type left, Type right)
     {
-        var underlyingLeft = left.IsNullable() ? left.GetNonNullableUnsafe() : null;
+        var underlyingLeft = left.IsNullable() ? left.GetUnderlyingNullableTypeUnsafe() : null;
         if (underlyingLeft != null && right.IsImplicitlyConvertibleTo(underlyingLeft))
             return underlyingLeft; // note: For conformity with BCL
 
@@ -2895,7 +2913,7 @@ internal static class TypeTools
 
     [RequiresUnreferencedCode(Trimming.Message)]
     private static bool IsImplicitlyNullableConvertibleTo(Type source, Type target) =>
-        target.IsNullable() && IsImplicitlyConvertibleTo(source.GetNonNullableOrSelf(), target.GetNonNullableUnsafe());
+        target.IsNullable() && IsImplicitlyConvertibleTo(source.GetNonNullableOrSelf(), target.GetUnderlyingNullableTypeUnsafe());
 
     [RequiresUnreferencedCode(Trimming.Message)]
     public static bool IsImplicitlyConvertibleTo(this Type source, Type target) =>
@@ -3335,7 +3353,8 @@ public class ConvertDelegateIntrinsicExpression : UnaryExpression
 
     [RequiresUnreferencedCode(Trimming.Message)]
     public override StringBuilder CustomToCSharpString(StringBuilder sb,
-        EnclosedIn enclosedIn, ref SmallList4<NamedWithIndex> named,
+        EnclosedIn enclosedIn,
+        ref SmallList<NamedWithIndex, Stack4<NamedWithIndex>> named,
         int lineIndent = 0, bool stripNamespace = false, Func<Type, string, string> printType = null, int indentSpaces = 4,
         ObjectToCode notRecognizedToCode = null)
     {
@@ -3825,6 +3844,7 @@ public abstract class ConstantExpression : Expression
 {
     public sealed override ExpressionType NodeType => ExpressionType.Constant;
     public abstract object Value { get; }
+
 #if SUPPORTS_VISITOR
     [RequiresUnreferencedCode(Trimming.Message)]
     protected internal override Expression Accept(ExpressionVisitor visitor) => visitor.VisitConstant(this);
@@ -3860,8 +3880,10 @@ public sealed class ValueConstantExpression : ConstantExpression
 public sealed class ValueConstantExpression<T> : ConstantExpression
 {
     public override Type Type => typeof(T);
+    // Note: the Value is specifically an object despite possibility of strongly typed T, because this way it will be a single boxing.
+    // Otherwise even using the typed `T _value`, it will be boxed multiple times through its `object Value` accessor.
     public override object Value { get; }
-    internal ValueConstantExpression(object value) => Value = value;
+    internal ValueConstantExpression(T value) => Value = value;
 }
 
 public sealed class TypedValueConstantExpression : ConstantExpression
@@ -3874,9 +3896,8 @@ public sealed class TypedValueConstantExpression : ConstantExpression
 public sealed class IntConstantExpression : ConstantExpression
 {
     public override Type Type => typeof(int);
-    public override object Value => IntValue;
-    public readonly int IntValue;
-    internal IntConstantExpression(int value) => IntValue = value;
+    public override object Value { get; }
+    internal IntConstantExpression(int value) => Value = value;
 }
 
 public class NewExpression : Expression, IArgumentProvider
@@ -5041,20 +5062,47 @@ public class BlockExpression : Expression, IArgumentProvider
     public override ExpressionType NodeType => ExpressionType.Block;
     public override Type Type => Result.Type;
     public virtual IReadOnlyList<ParameterExpression> Variables => Tools.Empty<ParameterExpression>();
-    public SmallList2<Expression> Expressions;
+    public SmallList<Expression, Stack2<Expression>> Expressions;
     public Expression Result => Expressions.GetLastSurePresentItem(); // todo: @check what if no expressions?
     public virtual int ArgumentCount => 0;
     public virtual Expression GetArgument(int index) => throw new NotImplementedException();
-    internal BlockExpression(in SmallList2<Expression> expressions) =>
+    internal BlockExpression(in SmallList<Expression, Stack2<Expression>> expressions) =>
         Expressions = expressions;
-    internal BlockExpression(Expression e0) =>
-        Expressions.Populate1(e0);
-    internal BlockExpression(Expression e0, Expression e1) =>
-        Expressions.Populate2(e0, e1);
-    internal BlockExpression(Expression e0, Expression e1, params Expression[] rest) =>
-        Expressions.Populate(e0, e1, rest);
-    internal BlockExpression(IReadOnlyList<Expression> expressions) =>
-        Expressions.Populate(expressions);
+    internal BlockExpression(Expression e0)
+    {
+        Expressions.Stack._it0 = e0;
+        Expressions.Count = 1;
+    }
+    internal BlockExpression(Expression e0, Expression e1)
+    {
+        Expressions.Stack._it0 = e0;
+        Expressions.Stack._it1 = e1;
+        Expressions.Count = 2;
+    }
+    internal BlockExpression(Expression e0, Expression e1, params Expression[] rest)
+    {
+        Expressions.Stack._it0 = e0;
+        Expressions.Stack._it1 = e1;
+        Expressions.Rest = rest;
+        Expressions.Count = rest.Length + 2;
+    }
+    internal BlockExpression(IReadOnlyList<Expression> expressions)
+    {
+        Debug.Assert(expressions != null, "Expressions cannot be null");
+        var count = expressions.Count;
+        if (count >= 1)
+            Expressions.Stack._it0 = expressions[0];
+        if (count >= 2)
+            Expressions.Stack._it1 = expressions[1];
+        if (count >= 3)
+        {
+            var rest = new Expression[count - 2];
+            for (var i = 2; i < count; ++i)
+                rest[i - 2] = expressions[i];
+            Expressions.Rest = rest;
+        }
+        Expressions.Count = count;
+    }
 #if SUPPORTS_VISITOR
     [RequiresUnreferencedCode(Trimming.Message)]
     protected internal override Expression Accept(ExpressionVisitor visitor) => visitor.VisitBlock(this);
@@ -5069,7 +5117,7 @@ public class BlockExpression : Expression, IArgumentProvider
 public sealed class TypedBlockExpression : BlockExpression
 {
     public override Type Type { get; }
-    internal TypedBlockExpression(Type type, in SmallList2<Expression> expressions) : base(in expressions) => Type = type;
+    internal TypedBlockExpression(Type type, in SmallList<Expression, Stack2<Expression>> expressions) : base(in expressions) => Type = type;
     internal TypedBlockExpression(Type type, Expression e0) : base(e0) => Type = type;
     internal TypedBlockExpression(Type type, Expression e0, Expression e1) : base(e0, e1) => Type = type;
     internal TypedBlockExpression(Type type, Expression e0, Expression e1, params Expression[] rest) : base(e0, e1, rest) => Type = type;
@@ -5081,7 +5129,7 @@ public class ManyVariablesBlockExpression : BlockExpression
     public sealed override IReadOnlyList<ParameterExpression> Variables { get; }
     public sealed override int ArgumentCount => Expressions.Count;
     public sealed override Expression GetArgument(int index) => Expressions.GetSurePresentItemRef(index);
-    internal ManyVariablesBlockExpression(IReadOnlyList<ParameterExpression> variables, in SmallList2<Expression> expressions) : base(in expressions) =>
+    internal ManyVariablesBlockExpression(IReadOnlyList<ParameterExpression> variables, in SmallList<Expression, Stack2<Expression>> expressions) : base(in expressions) =>
         Variables = variables;
     internal ManyVariablesBlockExpression(IReadOnlyList<ParameterExpression> variables, Expression e0) : base(e0) =>
         Variables = variables;
@@ -5096,7 +5144,7 @@ public class ManyVariablesBlockExpression : BlockExpression
 public sealed class TypedManyVariablesBlockExpression : ManyVariablesBlockExpression
 {
     public override Type Type { get; }
-    internal TypedManyVariablesBlockExpression(Type type, IReadOnlyList<ParameterExpression> variables, in SmallList2<Expression> expressions)
+    internal TypedManyVariablesBlockExpression(Type type, IReadOnlyList<ParameterExpression> variables, in SmallList<Expression, Stack2<Expression>> expressions)
         : base(variables, in expressions) => Type = type;
     internal TypedManyVariablesBlockExpression(Type type, IReadOnlyList<ParameterExpression> variables, Expression e0)
         : base(variables, e0) => Type = type;
@@ -5264,7 +5312,7 @@ public class LabelTarget
         Justification = "The method is used for debugging purposes only.")]
     public override string ToString()
     {
-        SmallList4<NamedWithIndex> named = default;
+        SmallList<NamedWithIndex, Stack4<NamedWithIndex>> named = default;
         return new StringBuilder().AppendLabelName(this, ref named).ToString();
     }
 }

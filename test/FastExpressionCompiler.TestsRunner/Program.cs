@@ -1,4 +1,6 @@
-﻿using System;
+﻿//#define INTERPRETATION_DIAGNOSTICS
+
+using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using FastExpressionCompiler.IssueTests;
@@ -9,26 +11,31 @@ namespace FastExpressionCompiler.UnitTests
     {
         public static void Main()
         {
-            // new LightExpression.IssueTests.Issue460_ArgumentException_when_converting_from_object_to_type_with_explicit_operator().Run();
+            // ILGeneratorTools.DisableILGeneratorPooling = true;
+            // LightExpression.ILGeneratorTools.DisableILGeneratorPooling = true;
 
-            // todo: @wip add to FEC, check the possibility of the increment compilation and the artifacts reusability
-            // new LightExpression.UnitTests.ConstantAndConversionTests().Run();
+            // new LightExpression.IssueTests.Issue347_InvalidProgramException_on_compiling_an_expression_that_returns_a_record_which_implements_IList().Run();
 
-            // new LightExpression.IssueTests.Issue458_Support_TryFault().Run();
-            // new LightExpression.IssueTests.Issue451_Operator_implicit_explicit_produces_InvalidProgram().Run();
+            // new LightExpression.UnitTests.NestedLambdasSharedToExpressionCodeStringTest().Run();
+            // new LightExpression.IssueTests.Issue274_Failing_Expressions_in_Linq2DB().Run();
+            // new Issue316_in_parameter().Run();
             // new LightExpression.IssueTests.Issue55_CompileFast_crash_with_ref_parameter().Run();
+            // new LightExpression.IssueTests.Issue341_Equality_comparison_between_nullable_and_null_inside_Any_produces_incorrect_compiled_expression().Run();
+            // new Issue441_Fails_to_pass_Constant_as_call_parameter_by_reference().Run();
+            // new Issue461_InvalidProgramException_when_null_checking_type_by_ref().Run();
 
-            // new Issue357_Invalid_program_exception().Run();
-            // new ValueTypeTests().Run();
-            // new LightExpression.IssueTestsArithmeticOperationsTests().Run();
+            var t = new LightExpression.TestRun(LightExpression.TestFlags.RethrowException);
 
-            // new LightExpression.IssueTests.Issue183_NullableDecimal().Run();
-            // new LightExpression.IssueTests.Issue159_NumericConversions().Run();
-            // new AssignTests().Run();
+            t.Run(new LightExpression.IssueTests.Issue476_System_ExecutionEngineException_with_nullables_on_repeated_calls_to_ConcurrentDictionary());
 
-            // new LightExpression.IssueTests.Issue449_MemberInit_produces_InvalidProgram().Run();
-            // new LightExpression.IssueTests.Issue437_Shared_variables_with_nested_lambdas_returning_incorrect_values().Run();
-            // new LightExpression.IssueTests.Issue353_NullReferenceException_when_calling_CompileFast_results().Run();
+            t.Run(new LightExpression.IssueTests.Issue468_Optimize_the_delegate_access_to_the_Closure_object_for_the_modern_NET());
+            t.Run(new LightExpression.IssueTests.Issue472_TryInterpret_and_Reduce_primitive_arithmetic_and_logical_expressions_during_the_compilation());
+            t.Run(new LightExpression.IssueTests.Issue473_InvalidProgramException_when_using_Expression_Condition_with_converted_decimal_expression());
+
+#if NET8_0_OR_GREATER
+            var ts = new TestRun();
+            ts.Run(new Issue475_Reuse_DynamicMethod_if_possible());
+#endif
 
             RunAllTests();
         }
@@ -186,8 +193,9 @@ namespace FastExpressionCompiler.UnitTests
                 Run(new LightExpression.IssueTests.Issue179_Add_something_like_LambdaExpression_CompileToMethod().Run);
                 Run(new Issue181_TryEmitIncDecAssign_InvalidCastException().Run);
                 Run(new LightExpression.IssueTests.Issue181_TryEmitIncDecAssign_InvalidCastException().Run);
-                Run(new Issue183_NullableDecimal().Run);
-                Run(new LightExpression.IssueTests.Issue183_NullableDecimal().Run);
+                // todo: @wip
+                // Run(new Issue183_NullableDecimal().Run);
+                // Run(new LightExpression.IssueTests.Issue183_NullableDecimal().Run);
                 Run(new Issue190_Inc_Dec_Assign_Parent_Block_Var().Run);
                 Run(new LightExpression.IssueTests.Issue190_Inc_Dec_Assign_Parent_Block_Var().Run);
                 Run(new Issue196_AutoMapper_tests_are_failing_when_using_FEC().Run);
@@ -271,6 +279,7 @@ namespace FastExpressionCompiler.UnitTests
                 Run(new LightExpression.IssueTests.Issue333_AccessViolationException_and_other_suspicious_behavior_on_invoking_result_of_CompileFast().Run);
 
                 Run(new Issue341_Equality_comparison_between_nullable_and_null_inside_Any_produces_incorrect_compiled_expression().Run);
+                Run(new LightExpression.IssueTests.Issue341_Equality_comparison_between_nullable_and_null_inside_Any_produces_incorrect_compiled_expression().Run);
 
                 Run(new LightExpression.IssueTests.Issue346_Is_it_possible_to_implement_ref_local_variables().Run);
 
@@ -286,9 +295,7 @@ namespace FastExpressionCompiler.UnitTests
                 Run(new Issue355_Error_with_converting_to_from_signed_unsigned_integers().Run);
                 Run(new LightExpression.IssueTests.Issue355_Error_with_converting_to_from_signed_unsigned_integers().Run);
 
-#if NET8_0_OR_GREATER && !LIGHT_EXPRESSION
                 Run(new Issue357_Invalid_program_exception().Run);
-#endif
 
                 Run(new LightExpression.IssueTests.Issue363_ActionFunc16Generics().Run);
 
@@ -378,6 +385,9 @@ namespace FastExpressionCompiler.UnitTests
 
                 Run(new Issue460_ArgumentException_when_converting_from_object_to_type_with_explicit_operator().Run);
                 Run(new LightExpression.IssueTests.Issue460_ArgumentException_when_converting_from_object_to_type_with_explicit_operator().Run);
+
+                Run(new Issue461_InvalidProgramException_when_null_checking_type_by_ref().Run);
+                Run(new LightExpression.IssueTests.Issue461_InvalidProgramException_when_null_checking_type_by_ref().Run);
 
                 Console.WriteLine($"{Environment.NewLine}IssueTests are passing in {sw.ElapsedMilliseconds} ms.");
             });

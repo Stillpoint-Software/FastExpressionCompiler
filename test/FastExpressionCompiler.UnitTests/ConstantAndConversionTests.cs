@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Linq.Expressions;
 
 #if LIGHT_EXPRESSION
@@ -13,8 +14,13 @@ public class ConstantAndConversionTests : ITest
 {
     public int Run()
     {
-        Can_return_constant2();
-
+#if LIGHT_EXPRESSION
+        Issue457_The_constant_changing_in_a_loop_without_recompilation();
+        Issue464_Bound_closure_constants_can_be_modified_afterwards();
+        Issue465_The_primitive_constant_can_be_configured_to_put_in_closure();
+        Issue466_The_constant_may_be_referenced_multiple_times();
+#endif
+        The_constant_changing_in_a_loop();
         Expressions_with_small_long_casts_should_not_crash();
         Expressions_with_larger_long_casts_should_not_crash();
         Expressions_with_long_constants_and_casts();
@@ -30,7 +36,7 @@ public class ConstantAndConversionTests : ITest
         Expressions_with_char_and_short();
         Can_use_constant_of_byte_Enum_type();
         Can_return_constant();
-        return 16;
+        return 18;
     }
 
     public void Expressions_with_small_long_casts_should_not_crash()
@@ -79,9 +85,9 @@ public class ConstantAndConversionTests : ITest
 
     public void Expressions_with_max_uint_constant()
     {
-        const uint maxuint = UInt32.MaxValue;
-        Asserts.IsFalse(maxuint == -1);
-        Asserts.IsFalse(ExpressionCompiler.CompileFast(((System.Linq.Expressions.Expression<Func<bool>>)(() => maxuint == -1)).FromSysExpression(), true)());
+        const uint maxUint = UInt32.MaxValue;
+        Asserts.IsFalse(maxUint == -1);
+        Asserts.IsFalse(ExpressionCompiler.CompileFast(((System.Linq.Expressions.Expression<Func<bool>>)(() => maxUint == -1)).FromSysExpression(), true)());
     }
 
     public void Expressions_with_DateTime_and_double_constant()
@@ -130,14 +136,82 @@ public class ConstantAndConversionTests : ITest
         Asserts.AreEqual(ExpressionCompiler.CompileFast(((System.Linq.Expressions.Expression<Func<bool>>)(() => true)).FromSysExpression(), true)(), true);
     }
 
-    public void Can_return_constant2()
+    public class Foo<T>
     {
+        public T Value;
+    }
+
+#if LIGHT_EXPRESSION
+
+    public void Issue464_Bound_closure_constants_can_be_modified_afterwards()
+    {
+        var foo = new Foo<int> { Value = 43 };
+        var expr = Lambda<Func<int>>(Field(Constant(foo), nameof(Foo<int>.Value)));
+        expr.PrintCSharp();
+
+        var fs = expr.CompileFast(true);
+        fs.PrintIL();
+
+        Asserts.AreEqual(43, fs());
+
+        foo.Value = 45;
+        Asserts.AreEqual(45, fs());
+    }
+
+    public void Issue465_The_primitive_constant_can_be_configured_to_put_in_closure()
+    {
+        var expr = Lambda<Func<int>>(ConstantRef(16, out var n));
+        expr.PrintCSharp();
+
+        var fs = expr.CompileFast(true);
+        fs.PrintIL();
+
+        Asserts.AreEqual(16, fs());
+
+        n.Value = 45; // <-- WIN!
+        Asserts.AreEqual(45, fs());
+    }
+
+    public void Issue466_The_constant_may_be_referenced_multiple_times()
+    {
+        var nExpr = ConstantRef(16, out var n);
+        var expr = Lambda<Func<int>>(Add(nExpr, nExpr));
+        expr.PrintCSharp();
+
+        var fs = expr.CompileFast(true);
+        fs.PrintIL();
+
+        Asserts.AreEqual(32, fs());
+
+        n.Value = 45;
+        Asserts.AreEqual(90, fs());
+    }
+
+    public void Issue457_The_constant_changing_in_a_loop_without_recompilation()
+    {
+        var sw = Stopwatch.StartNew();
+        var refConst = ConstantRef(0, out var val);
+        var blockExpr = Block(refConst);
+        var lambda = Lambda<Func<int>>(blockExpr);
+        var fastCompiled = lambda.CompileFast(true);
+
         for (int n = -200; n < 200; n++)
         {
-            var blockExpr =
-                Block(
-                    Constant(n)
-                );
+            val.Value = n;
+            Asserts.AreEqual(n, fastCompiled());
+        }
+
+        Debug.WriteLine($"Issue457_The_constant_changing_in_a_loop_without_recompilation, elapsed: {sw.ElapsedMilliseconds}ms");
+        sw.Stop();
+    }
+#endif
+
+    public void The_constant_changing_in_a_loop()
+    {
+        var sw = Stopwatch.StartNew();
+        for (int n = -200; n < 200; n++)
+        {
+            var blockExpr = Block(Constant(n));
 
             var lambda = Lambda<Func<int>>(blockExpr);
 
@@ -145,6 +219,8 @@ public class ConstantAndConversionTests : ITest
 
             Asserts.AreEqual(n, fastCompiled());
         }
+        Debug.WriteLine($"The_constant_changing_in_a_loop, elapsed: {sw.ElapsedMilliseconds}ms");
+        sw.Stop();
     }
 
     public enum XByte : byte { A }

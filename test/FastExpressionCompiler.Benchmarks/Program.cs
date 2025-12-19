@@ -20,11 +20,16 @@ public class Program
         // BenchmarkRunner.Run<ManuallyComposedLambdaBenchmark.Create>(); // not included in README.md, may be it needs to
         // BenchmarkRunner.Run<ManuallyComposedLambdaBenchmark.Create_and_Compile>(); // not included in README.md, may be it needs to
 
-        BenchmarkRunner.Run<LightExprVsExpr_Create_ComplexExpr>();
-        BenchmarkRunner.Run<LightExprVsExpr_CreateAndCompile_ComplexExpr>();
+        // BenchmarkRunner.Run<LightExprVsExpr_Create_ComplexExpr>();
+        // BenchmarkRunner.Run<LightExprVsExpr_CreateAndCompile_ComplexExpr>();
 
         //--------------------------------------------
 
+        // BenchmarkRunner.Run<Issue475_ReuseVsNoReuse>();
+
+        // BenchmarkRunner.Run<Issue468_Compile_vs_FastCompile>();
+        // BenchmarkRunner.Run<Issue468_InvokeCompiled_vs_InvokeCompiledFast>();
+        // BenchmarkRunner.Run<Issue468_Eval_Optimization>();
 
         // BenchmarkRunner.Run<AccessByRef_vs_ByIGetRefStructImpl>();
 
@@ -45,6 +50,9 @@ public class Program
         //BenchmarkRunner.Run<ClosureConstantsBenchmark.Compilation>();
         //BenchmarkRunner.Run<ClosureConstantsBenchmark.Invocation>();
 
+        BenchmarkRunner.Run<StackSearch>();
+        // BenchmarkRunner.Run<SmallList_Switch_vs_AsSpan_ByRef_Add>();
+        // BenchmarkRunner.Run<SmallList_Switch_vs_AsSpan_ByRef_Access>();
         // BenchmarkRunner.Run<ArrayCopy_vs_ArrayResize_vs_ForLoop>();
 
         //var a = new NestedLambdasVsVars();

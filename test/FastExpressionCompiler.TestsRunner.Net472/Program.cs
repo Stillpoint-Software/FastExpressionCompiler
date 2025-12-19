@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 using FastExpressionCompiler.IssueTests;
 
@@ -12,7 +13,66 @@ namespace FastExpressionCompiler.UnitTests
             // new Issue414_Incorrect_il_when_passing_by_ref_value().Run();
             // new Issue55_CompileFast_crash_with_ref_parameter().Run();
 
+            RunTestsX();
+
             RunAllTests();
+        }
+
+        public static void RunTestsX()
+        {
+            var totalStopwatch = Stopwatch.StartNew();
+
+            Console.WriteLine("""
+
+            ### TestX runs on FEC tests (UnitTests and IssueTests) and FEC.LightExpression tests in ||
+            """);
+
+            var lightTestsStopwatch = Stopwatch.StartNew();
+            var lightTestsThread = new Thread(RunLightExpressionTests) { IsBackground = false, Name = "Tests - FEC.LightExpression" };
+            static void RunLightExpressionTests(object state)
+            {
+                var justLightTestsStopwatch = Stopwatch.StartNew();
+
+                var t = (LightExpression.TestRun)state;
+                t.Run(new LightExpression.IssueTests.Issue183_NullableDecimal());
+                t.Run(new LightExpression.IssueTests.Issue468_Optimize_the_delegate_access_to_the_Closure_object_for_the_modern_NET());
+                t.Run(new LightExpression.IssueTests.Issue472_TryInterpret_and_Reduce_primitive_arithmetic_and_logical_expressions_during_the_compilation());
+                t.Run(new LightExpression.IssueTests.Issue473_InvalidProgramException_when_using_Expression_Condition_with_converted_decimal_expression());
+
+                Console.WriteLine($"Just LightExpression tests are passing in {justLightTestsStopwatch.ElapsedMilliseconds} ms.");
+            }
+            var lightTests = new LightExpression.TestRun();
+            lightTestsThread.Start(lightTests);
+
+
+            var fecTestsStopwatch = Stopwatch.StartNew();
+
+            var fecTests = new TestRun();
+            fecTests.Run(new Issue183_NullableDecimal());
+            fecTests.Run(new Issue468_Optimize_the_delegate_access_to_the_Closure_object_for_the_modern_NET());
+            fecTests.Run(new Issue472_TryInterpret_and_Reduce_primitive_arithmetic_and_logical_expressions_during_the_compilation());
+            fecTests.Run(new Issue473_InvalidProgramException_when_using_Expression_Condition_with_converted_decimal_expression());
+
+
+            Console.WriteLine($"FEC tests are passing in {fecTestsStopwatch.ElapsedMilliseconds} ms.");
+
+
+            var waitForLightStopwatch = Stopwatch.StartNew();
+            lightTestsThread.Join(); // wait for the light tests to finish
+            Console.WriteLine($"LightExpression tests + Thread New, Start, Join: {lightTestsStopwatch.ElapsedMilliseconds} ms.");
+            Console.WriteLine($"--> waited for the LightExpression tests to finish after FEC tests complete for {waitForLightStopwatch.ElapsedMilliseconds} ms.");
+
+            Console.WriteLine();
+            if (fecTests.FailedTestCount > 0 || lightTests.FailedTestCount > 0)
+            {
+                // todo: @wip output the failed tests
+                Console.WriteLine("ERROR: Some tests are FAILED!");
+                Environment.Exit(1); // exit with error
+                return;
+            }
+
+            var totalTestCount = fecTests.TotalTestCount + lightTests.TotalTestCount;
+            Console.WriteLine($"TestX: {totalTestCount,-4} tests are passing in {totalStopwatch.ElapsedMilliseconds} ms.");
         }
 
         public static void RunAllTests()
@@ -163,8 +223,9 @@ namespace FastExpressionCompiler.UnitTests
                 Run(new LightExpression.IssueTests.Issue179_Add_something_like_LambdaExpression_CompileToMethod().Run);
                 Run(new Issue181_TryEmitIncDecAssign_InvalidCastException().Run);
                 Run(new LightExpression.IssueTests.Issue181_TryEmitIncDecAssign_InvalidCastException().Run);
-                Run(new Issue183_NullableDecimal().Run);
-                Run(new LightExpression.IssueTests.Issue183_NullableDecimal().Run);
+                // todo: @wip #453
+                // Run(new Issue183_NullableDecimal().Run);
+                // Run(new LightExpression.IssueTests.Issue183_NullableDecimal().Run);
                 Run(new Issue190_Inc_Dec_Assign_Parent_Block_Var().Run);
                 Run(new LightExpression.IssueTests.Issue190_Inc_Dec_Assign_Parent_Block_Var().Run);
                 Run(new Issue196_AutoMapper_tests_are_failing_when_using_FEC().Run);
@@ -339,6 +400,9 @@ namespace FastExpressionCompiler.UnitTests
 
                 Run(new Issue460_ArgumentException_when_converting_from_object_to_type_with_explicit_operator().Run);
                 Run(new LightExpression.IssueTests.Issue460_ArgumentException_when_converting_from_object_to_type_with_explicit_operator().Run);
+
+                Run(new Issue461_InvalidProgramException_when_null_checking_type_by_ref().Run);
+                Run(new LightExpression.IssueTests.Issue461_InvalidProgramException_when_null_checking_type_by_ref().Run);
 
                 Console.WriteLine($"{Environment.NewLine}IssueTests are passing in {sw.ElapsedMilliseconds} ms.");
             });
